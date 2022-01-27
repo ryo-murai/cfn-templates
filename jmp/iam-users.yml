@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "IAM users"
+
+Resources:
+  # ------------------------------------------------------------------
+  # IAM Users
+  # ------------------------------------------------------------------
+  IamUserRyoMurai:
+    Type: "AWS::IAM::User"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserName: "ryo-murai"
+      Groups:
+        - "mpx-jmp-grp-admin"
+        - "mpx-jmp-grp-ops"
+        - "mpx-jmp-grp-readonly"
+        - "mpx-prd-grp-admin"
+        - "mpx-prd-grp-ops"
+        - "mpx-prd-grp-readonly"

@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "IAM Managed Policies"
+
+Parameters:
+  Prefix:
+    Type: String
+    Description: "prefix for name of resources"
+  RestrictIpAddressWhiteList:
+    Description: "choose `yes` to restrict source IP addresses by whitelist" 
+    Type: String     
+    AllowedValues:
+      - "yes"
+      - "no"
+    Default: "no"
+
+Conditions:
+  SourceIpAddressCheck:
+    !Equals
+       - !Ref RestrictIpAddressWhiteList
+       - "yes"
+
+Mappings:
+  # IP Address whitelist restriction
+  IpAddress:
+    source:
+      value:
+        - "0.0.0.0/0"  # all
+
+Resources:
+  # ------------------------------------------------------------------
+  # IAM Managed Policy
+  # ------------------------------------------------------------------
+  BasicPolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: !Sub "${Prefix}-basic-policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowListUsers
+            Effect: Allow
+            Action:
+              - "iam:ListUsers"
+            Resource:
+              - !Sub "arn:aws:iam::${AWS::AccountId}:user/"
+          - Sid: AlowViewAccountInfo
+            Effect: Allow
+            Action:
+              - "iam:ListVirtualMFADevices"
+            Resource:
+              - !Sub "arn:aws:iam::${AWS::AccountId}:mfa/"
+          - Sid: AllowManageOwnMFA
+            Effect: Allow
+            Action:
+              - "iam:EnableMFADevice"
+              - "iam:DeactivateMFADevice"
+              - "iam:ResyncMFADevice"
+              - "iam:ListMFADevices"
+              - "iam:ChangePassword"
+            Resource:
+              - !Sub "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
+          - Sid: AllowManageOwnVirtualMFADevice
+            Effect: Allow
+            Action:
+              - "iam:DeleteVirtualMFADevice"
+              - "iam:CreateVirtualMFADevice"
+            Resource:
+              - !Sub "arn:aws:iam::${AWS::AccountId}:mfa/${!aws:username}"
+          - Sid: AllowGetAccountPasswordPolicy
+            Effect: Allow
+            Action:
+              - "iam:GetAccountPasswordPolicy"
+            Resource:
+              - !Sub "arn:aws:iam::${AWS::AccountId}:*"
+          - Sid: AllowChangeOwnPassword
+            Effect: Allow
+            Action:
+              - "iam:GetUser"
+              - "iam:ChangePassword"
+              - "iam:GetLoginProfile"
+            Resource:
+              - !Sub "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
+          - Sid: AllowManageOwnAccessKey
+            Effect: Allow
+            Action:
+              - "iam:CreateAccessKey"
+              - "iam:DeleteAccessKey"
+              - "iam:ListAccessKeys"
+              - "iam:UpdateAccessKey"
+            Resource:
+              - !Sub "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
+          - !If
+            - SourceIpAddressCheck
+            - Sid: SourceIPAddressRestriction
+              Effect: Deny
+              Action:
+                - "*"
+              Resource:
+                - "*"
+              Condition:
+                NotIpAddress:
+                  "aws:SourceIp":
+                    "Fn::FindInMap":
+                      - IpAddress
+                      - source
+                      - value
+                Bool:
+                  "aws:ViaAWSService": false
+            - !Ref AWS::NoValue

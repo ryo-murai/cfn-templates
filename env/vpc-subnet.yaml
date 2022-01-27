@@ -1,0 +1,503 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Metadata: 
+  "AWS::CloudFormation::Interface": 
+    ParameterGroups: 
+      - Label: 
+          default: "Namings"
+        Parameters: 
+          - Prefix
+      - Label: 
+          default: "VPC parameters"
+        Parameters: 
+          - VpcCidr
+          - AvailabilityZoneA
+          - AvailabilityZoneC
+          - SubnetCidrPublicA
+          - SubnetCidrPublicC
+          - SubnetCidrPrivateA
+          - SubnetCidrPrivateC
+          - SubnetCidrDataA
+          - SubnetCidrDataC
+          - SubnetCidrOpsA
+          - SubnetCidrOpsC
+      - Label: 
+          default: "Options"
+        Parameters: 
+          - NatGwConfig
+          - NeedVPCEndpointDynamoDB
+
+    ParameterLabels: 
+      Prefix:
+        default: "prefix for resource name"
+      VpcCidr: 
+        default: "VPC CIDR"
+      SubnetCidrPublicA: 
+        default: "public subnet Zone A CIDR"
+      SubnetCidrPublicC: 
+        default: "Public Subnet Zone C CIDR"
+      SubnetCidrPrivateA: 
+        default: "Private Subnet Zone A CIDR"
+      SubnetCidrPrivateC: 
+        default: "Private Subnet Zone C CIDR"
+      SubnetCidrDataA: 
+        default: "Data Subnet Zone A CIDR"
+      SubnetCidrDataC: 
+        default: "Data Subnet Zone C CIDR"
+      SubnetCidrOpsA: 
+        default: "Operational Subnet Zone A CIDR"
+      SubnetCidrOpsC: 
+        default: "Operational Subnet Zone C CIDR"
+      NatGwConfig:
+        default: "NAT Gateway configuration"
+      NeedVPCEndpointDynamoDB:
+        default: "need VPC Endpoint for DynamoDB"
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  Prefix:
+    Type: String
+    Description: "prefix for name of resources"
+
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+
+  AvailabilityZoneA:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: "ap-northeast-1a"
+
+  AvailabilityZoneC:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: "ap-northeast-1c"
+
+  SubnetCidrPublicA:
+    Type: String
+    Default: "10.0.1.0/24"
+
+  SubnetCidrPublicC:
+    Type: String
+    Default: "10.0.2.0/24"
+
+  SubnetCidrPrivateA:
+    Type: String
+    Default: "10.0.11.0/24"
+
+  SubnetCidrPrivateC:
+    Type: String
+    Default: "10.0.12.0/24"
+
+  SubnetCidrDataA:
+    Type: String
+    Default: "10.0.21.0/24"
+
+  SubnetCidrDataC:
+    Type: String
+    Default: "10.0.22.0/24"
+
+  SubnetCidrOpsA:
+    Type: String
+    Default: "10.0.31.0/24"
+
+  SubnetCidrOpsC:
+    Type: String
+    Default: "10.0.32.0/24"
+
+  NatGwConfig:
+    Type: String
+    Default: "none"
+    Description: "** NAT Gateway will be charged for use"
+    AllowedValues:
+      - "none"
+      - "single-az"
+      - "multi-az"
+
+  NeedVPCEndpointDynamoDB:
+    Type: String
+    Default: "no"
+    AllowedValues:
+      - "no"
+      - "yes"
+
+Conditions:
+  CreateNatGwA: !Not
+    - !Equals 
+        - !Ref NatGwConfig
+        - "none"
+
+  NatGwSingle:
+    !Equals 
+      - !Ref NatGwConfig
+      - "single-az"
+
+  NatGwMultiAz:
+    !Equals
+      - !Ref NatGwConfig
+      - "multi-az"
+  
+  CreateVPCE4DynamoDB:
+    !Equals
+      - !Ref NeedVPCEndpointDynamoDB
+      - "yes"
+
+Resources:
+  # ------------------------------------------------------------#
+  #  VPC
+  # ------------------------------------------------------------#
+  VPC: 
+    Type: "AWS::EC2::VPC"
+    Properties: 
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}vpc"
+
+  SSMParamVpcId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/VpcId"
+      Type: String
+      Value: !Ref VPC
+
+  SSMParamVpcCidr:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/VpcCidr"
+      Type: String
+      Value: !GetAtt VPC.CidrBlock
+
+  InternetGateway: 
+    Type: "AWS::EC2::InternetGateway"
+    Properties: 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}igw"
+
+  InternetGatewayAttachment: 
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties: 
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC 
+
+  PublicSubnetA: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: !Ref AvailabilityZoneA
+      CidrBlock: !Ref SubnetCidrPublicA
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}subnet-public-a"
+
+  SSMParamSubnetPubAId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/SubnetPubAId"
+      Type: String
+      Value: !Ref PublicSubnetA
+
+  PublicSubnetC: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: !Ref AvailabilityZoneC
+      CidrBlock: !Ref SubnetCidrPublicC
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}subnet-public-c"
+
+  SSMParamSubnetPubCId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/SubnetPubCId"
+      Type: String
+      Value: !Ref PublicSubnetC
+
+  PrivateSubnetA: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: !Ref AvailabilityZoneA
+      CidrBlock: !Ref SubnetCidrPrivateA
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}subnet-private-a"
+
+  SSMParamSubnetPrvAId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/SubnetPrvAId"
+      Type: String
+      Value: !Ref PrivateSubnetA
+
+  PrivateSubnetC: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: !Ref AvailabilityZoneC
+      CidrBlock: !Ref SubnetCidrPrivateC
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}subnet-private-c"
+
+  SSMParamSubnetPrvCId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/SubnetPrvCId"
+      Type: String
+      Value: !Ref PrivateSubnetC
+
+  DataSubnetA: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: !Ref AvailabilityZoneA
+      CidrBlock: !Ref SubnetCidrDataA
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}subnet-data-a"
+
+  SSMParamSubnetDatAId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/SubnetDatAId"
+      Type: String
+      Value: !Ref DataSubnetA
+
+  DataSubnetC: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: !Ref AvailabilityZoneC
+      CidrBlock: !Ref SubnetCidrDataC
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}subnet-data-c"
+
+  SSMParamSubnetDatCId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/SubnetDatCId"
+      Type: String
+      Value: !Ref DataSubnetC
+
+  OperationalSubnetA: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: !Ref AvailabilityZoneA
+      CidrBlock: !Ref SubnetCidrOpsA
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}subnet-ops-a"
+
+  SSMParamSubnetOpsAId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/SubnetOpsAId"
+      Type: String
+      Value: !Ref OperationalSubnetA
+
+  OperationalSubnetC: 
+    Type: "AWS::EC2::Subnet"
+    Properties: 
+      AvailabilityZone: !Ref AvailabilityZoneC
+      CidrBlock: !Ref SubnetCidrOpsC
+      VpcId: !Ref VPC 
+      Tags: 
+        - Key: Name
+          Value: !Sub "${Prefix}subnet-ops-c"
+
+  SSMParamSubnetOpsCId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/cfn/SubnetOpsCId"
+      Type: String
+      Value: !Ref OperationalSubnetC
+
+  # ------------------------------------------------------------#
+  #  RouteTable
+  # ------------------------------------------------------------#       
+  # Routing for public subnet
+  RouteTablePublicSubnet:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}pubic-route-table"
+
+  RoutePublicSubnetIGW: 
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref RouteTablePublicSubnet 
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway 
+
+  SubnetTableAssociationPublicSubnetA: 
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      SubnetId: !Ref PublicSubnetA 
+      RouteTableId: !Ref RouteTablePublicSubnet
+
+  SubnetTableAssociationPublicSubnetC: 
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      SubnetId: !Ref PublicSubnetC
+      RouteTableId: !Ref RouteTablePublicSubnet
+
+  # Routing for private / operational subnets
+  RouteTableNonPublicSubnetA:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}nonpublic-route-table-a"
+
+  RouteTableNonPublicSubnetC:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}nonpublic-route-table-c"
+
+  SubnetTableAssociationPrivateSubnetA: 
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      SubnetId: !Ref PrivateSubnetA 
+      RouteTableId: !Ref RouteTableNonPublicSubnetA
+
+  SubnetTableAssociationPrivateSubnetC: 
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      SubnetId: !Ref PrivateSubnetC
+      RouteTableId: !Ref RouteTableNonPublicSubnetC
+
+  SubnetTableAssociationOperationalSubnetA: 
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      SubnetId: !Ref OperationalSubnetA 
+      RouteTableId: !Ref RouteTableNonPublicSubnetA
+
+  SubnetTableAssociationOperationalSubnetC: 
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      SubnetId: !Ref OperationalSubnetC
+      RouteTableId: !Ref RouteTableNonPublicSubnetC
+
+  # ------------------------------------------------------------#
+  #  NAT Gateway
+  # ------------------------------------------------------------#
+  EIPNatGwA:
+    Type: "AWS::EC2::EIP"
+    Condition: CreateNatGwA
+    Properties:
+      Domain: "vpc"
+      Tags: 
+        - Key: "Name"
+          Value: !Sub "${Prefix}eip-natgw-a"
+
+  EIPNatGwC:
+    Type: "AWS::EC2::EIP"
+    Condition: NatGwMultiAz
+    Properties:
+      Domain: "vpc"
+      Tags: 
+        - Key: "Name"
+          Value: !Sub "${Prefix}eip-natgw-c"
+
+  NatGatewayA:
+    Type: "AWS::EC2::NatGateway"
+    Condition: CreateNatGwA
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      AllocationId: !GetAtt EIPNatGwA.AllocationId
+      Tags: 
+        - Key: "Name"
+          Value: !Sub "${Prefix}nat-a"
+
+  RouteNonPublicSubnetANatGw:
+    Type: AWS::EC2::Route
+    Condition: CreateNatGwA
+    Properties:
+      RouteTableId: !Ref RouteTableNonPublicSubnetA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  NatGatewayC:
+    Type: "AWS::EC2::NatGateway"
+    Condition: NatGwMultiAz
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      AllocationId: !GetAtt EIPNatGwC.AllocationId
+      Tags: 
+        - Key: "Name"
+          Value: !Sub "${Prefix}nat-c"
+
+  RouteNonPublicSubnetCNatGw:
+    Type: AWS::EC2::Route
+    Condition: CreateNatGwA
+    Properties:
+      RouteTableId: !Ref RouteTableNonPublicSubnetC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If 
+        - NatGwSingle
+        - !Ref NatGatewayA
+        - !Ref NatGatewayC
+
+  # ------------------------------------------------------------#
+  #  VPC Endpoints (Gateway type)
+  # ------------------------------------------------------------#
+  VPCEndpointS3:
+    Type: "AWS::EC2::VPCEndpoint"
+    Properties:
+      VpcEndpointType: "Gateway"
+      VpcId: !Ref VPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      PolicyDocument: |
+        {
+          "Version": "2008-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "*",
+              "Resource": "*"
+            }
+          ]
+        }
+      RouteTableIds: 
+        - !Ref RouteTablePublicSubnet
+        - !Ref RouteTableNonPublicSubnetA
+        - !Ref RouteTableNonPublicSubnetC
+
+  VPCEndpointDynamoDB:
+    Type: "AWS::EC2::VPCEndpoint"
+    Condition: CreateVPCE4DynamoDB
+    Properties:
+      VpcEndpointType: "Gateway"
+      VpcId: !Ref VPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.dynamodb"
+      PolicyDocument: |
+        {
+          "Version": "2008-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "*",
+              "Resource": "*"
+            }
+          ]
+        }
+      RouteTableIds: 
+        - !Ref RouteTablePublicSubnet
+        - !Ref RouteTableNonPublicSubnetA
+        - !Ref RouteTableNonPublicSubnetC

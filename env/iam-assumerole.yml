@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "Create IAM Role (switch target)"
+
+Parameters:
+  Prefix:
+    Type: String
+    Description: "prefix for name of resources"
+  OriginalAWSaccountID:
+    Description: "Switch original AWSaccount ID"
+    Type: String
+    Default: "000000000000"
+    MaxLength: 12
+    MinLength: 12
+  EnvironmentName:
+    Description: "environment name for this role"
+    Type: String
+    AllowedValues:
+      - "jmp"
+      - "prd"
+      - "stg"
+
+Resources:
+  # ------------------------------------------------------------------
+  # IAM Roles
+  # ------------------------------------------------------------------
+  RoleAdmin:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${Prefix}-${EnvironmentName}-role-admin-assumerole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "sts:AssumeRole"
+            Principal:
+              AWS: !Sub "arn:aws:iam::${OriginalAWSaccountID}:root"
+            Condition:
+              Bool:
+                "aws:MultiFactorAuthPresent": true
+
+  RoleOps:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${Prefix}-${EnvironmentName}-role-ops-assumerole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "sts:AssumeRole"
+            Principal:
+              AWS: !Sub "arn:aws:iam::${OriginalAWSaccountID}:root"
+            Condition:
+              Bool:
+                "aws:MultiFactorAuthPresent": true
+      Policies:
+        - PolicyName: !Sub "${Prefix}-${EnvironmentName}-pol-ops"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codecommit:GitPull"
+                  - "codecommit:GitPush"
+                  - "codecommit:CreateBranch"
+                  - "codecommit:MergeBranchesBy*"
+                  - "codecommit:UpdateDefaultBranch"
+                  - "codebuild:RetryBuild"
+                  - "codebuild:StartBuild"
+                  - "codebuild:StopBuild"
+                Resource:
+                  - "*"
+        - PolicyName: !Sub "${Prefix}-${EnvironmentName}-pol-ops-ssm-session"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:StartSession"
+                Resource:
+                  - "*"
+                Condition:
+                  StringLike:
+                    ssm:resourceTag/Name:
+                      - "bastion*"
+              - Effect: Allow
+                Action:
+                  - "ssm:TerminateSession"
+                  - "ssm:ResumeSession"
+                Resource:
+                  - "arn:aws:ssm:*:*:session/${aws:username}-*"
+
+  RoleReadonly:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${Prefix}-${EnvironmentName}-role-readonly-assumerole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "sts:AssumeRole"
+            Principal:
+              AWS: !Sub "arn:aws:iam::${OriginalAWSaccountID}:root"
+            Condition:
+              Bool:
+                "aws:MultiFactorAuthPresent": true
+
+Outputs:
+  SwitchRoleAdminUrl:
+    Value: !Sub "https://signin.aws.amazon.com/switchrole?account=${AWS::AccountId}&roleName=${Prefix}-${EnvironmentName}-role-admin-assumerole&displayName=${EnvironmentName}-admin"
+    Description: "switch role url for admin"
+
+  SwitchRoleOpsUrl:
+    Value: !Sub "https://signin.aws.amazon.com/switchrole?account=${AWS::AccountId}&roleName=${Prefix}-${EnvironmentName}-role-ops-assumerole&displayName=${EnvironmentName}-ops"
+    Description: "switch role url for ops"
+
+  SwitchRoleReadonlyUrl:
+    Value: !Sub "https://signin.aws.amazon.com/switchrole?account=${AWS::AccountId}&roleName=${Prefix}-${EnvironmentName}-role-readonly-assumerole&displayName=${EnvironmentName}-readonly"
+    Description: "switch role url for readonly"

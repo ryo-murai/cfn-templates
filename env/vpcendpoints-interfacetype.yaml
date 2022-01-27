@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Metadata: 
+  "AWS::CloudFormation::Interface": 
+    ParameterGroups: 
+      - Label: 
+          default: "Namings"
+        Parameters: 
+          - Prefix
+      - Label: 
+          default: "VPC parameters"
+        Parameters: 
+          - VpcId
+          - VpcCidr
+          - OperationalSubnetAId
+          - OperationalSubnetCId
+      - Label: 
+          default: "Options"
+        Parameters: 
+          - UseSSMSessionManager
+          - UseCloudWatchLogs
+
+    ParameterLabels: 
+      UseSSMSessionManager:
+        default: "Create necessary endpoints for SSM session manager"
+      UseCloudWatchLogs:
+        default: "create necessary endpoints for CloudWatch Logs"
+
+
+Parameters:
+  Prefix:
+    Type: String
+    Description: "prefix for name of resources"
+
+  VpcId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>
+    Description: VPC id for Endpoints
+    Default: /cfn/VpcId
+
+  VpcCidr:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: VPC CIDR block
+    Default: /cfn/VpcCidr
+
+  OperationalSubnetAId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Subnet::Id>
+    Description: Operational Subnet A id for Endpoints
+    Default: /cfn/SubnetOpsAId
+
+  OperationalSubnetCId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Subnet::Id>
+    Description: Operational Subnet C id for Endpoints
+    Default: /cfn/SubnetOpsCId
+
+  UseSSMSessionManager:
+    Type: String
+    Description: "** VPC Endpoints (interface type) will be charged for use."
+    Default: "no"
+    AllowedValues:
+      - "yes"
+      - "no"
+
+  UseCloudWatchLogs:
+    Type: String
+    Description: "** VPC Endpoints (interface type) will be charged for use."
+    Default: "no"
+    AllowedValues:
+      - "yes"
+      - "no"
+
+Conditions:
+  CreateSSMSMVPCE:
+    !Equals 
+      - !Ref UseSSMSessionManager
+      - "yes"
+
+  CreateCWLogsVPCE:
+    !Equals 
+      - !Ref UseCloudWatchLogs
+      - "yes"
+
+Resources:
+  # ------------------------------------------------------------#
+  #  VPC Endpoints (Interface type)
+  # ------------------------------------------------------------#
+  EC2VPCEndpointSSM:
+    Type: "AWS::EC2::VPCEndpoint"
+    Condition: CreateSSMSMVPCE
+    Properties:
+      VpcEndpointType: "Interface"
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+      PolicyDocument: |
+        {
+          "Statement": [
+            {
+              "Action": "*", 
+              "Effect": "Allow", 
+              "Principal": "*", 
+              "Resource": "*"
+            }
+          ]
+        }
+      SubnetIds: 
+        - !Ref OperationalSubnetAId
+        - !Ref OperationalSubnetCId
+      PrivateDnsEnabled: true
+      SecurityGroupIds: 
+        - !Ref VPCEndpointSecurityGroup
+
+  EC2VPCEndpointSSMmessages:
+    Type: "AWS::EC2::VPCEndpoint"
+    Condition: CreateSSMSMVPCE
+    Properties:
+      VpcEndpointType: "Interface"
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssmmessages"
+      PolicyDocument: |
+        {
+          "Statement": [
+            {
+              "Action": "*", 
+              "Effect": "Allow", 
+              "Principal": "*", 
+              "Resource": "*"
+            }
+          ]
+        }
+      SubnetIds: 
+        - !Ref OperationalSubnetAId
+        - !Ref OperationalSubnetCId
+      PrivateDnsEnabled: true
+      SecurityGroupIds: 
+        - !Ref VPCEndpointSecurityGroup
+
+  EC2VPCEndpointEC2messages:
+    Type: "AWS::EC2::VPCEndpoint"
+    Condition: CreateSSMSMVPCE
+    Properties:
+      VpcEndpointType: "Interface"
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ec2messages"
+      PolicyDocument: |
+        {
+          "Statement": [
+            {
+              "Action": "*", 
+              "Effect": "Allow", 
+              "Principal": "*", 
+              "Resource": "*"
+            }
+          ]
+        }
+      SubnetIds: 
+        - !Ref OperationalSubnetAId
+        - !Ref OperationalSubnetCId
+      PrivateDnsEnabled: true
+      SecurityGroupIds: 
+        - !Ref VPCEndpointSecurityGroup
+
+  EC2VPCEndpointLogs:
+    Type: "AWS::EC2::VPCEndpoint"
+    Condition: CreateCWLogsVPCE
+    Properties:
+      VpcEndpointType: "Interface"
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
+      PolicyDocument: |
+        {
+          "Statement": [
+            {
+              "Action": "*", 
+              "Effect": "Allow", 
+              "Principal": "*", 
+              "Resource": "*"
+            }
+          ]
+        }
+      SubnetIds: 
+        - !Ref OperationalSubnetAId
+        - !Ref OperationalSubnetCId
+      PrivateDnsEnabled: true
+      SecurityGroupIds: 
+        - !Ref VPCEndpointSecurityGroup
+
+  # Security Group
+  VPCEndpointSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "use for VPC endpoints"
+      GroupName: !Sub "${Prefix}sg-vpcendpoints"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress: 
+        - 
+          CidrIp: !Ref VpcCidr
+          FromPort: 443
+          IpProtocol: "TCP"
+          ToPort: 443
+      SecurityGroupEgress: 
+        - 
+          CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"

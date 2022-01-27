@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "IAM Groups"
+
+Parameters:
+  Prefix:
+    Type: String
+    Description: "prefix for name of resources"
+  TargetAWSaccountID:
+    Description: "Switch target AWSaccount ID"
+    Type: String
+    Default: "111111111111"
+    MaxLength: 12
+    MinLength: 12
+  EnvironmentName:
+    Description: "target environment to switch"
+    Type: String
+    AllowedValues:
+      - "jmp"
+      - "prd"
+      - "stg"
+
+Resources:
+  # ------------------------------------------------------------------
+  # IAM Groups
+  # ------------------------------------------------------------------
+  #IAM Group (Admin)
+  GroupAdmin:
+    Type: "AWS::IAM::Group"
+    Properties:
+      GroupName: !Sub "${Prefix}-${EnvironmentName}-grp-admin"
+      ManagedPolicyArns:
+        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/${Prefix}-basic-policy"
+      Policies:
+        - PolicyName: !Sub "${Prefix}-${EnvironmentName}-polgrp-admin"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sts:AssumeRole"
+                Resource:
+                  - !Sub "arn:aws:iam::${TargetAWSaccountID}:role/${Prefix}-${EnvironmentName}-role-admin-assumerole"
+
+  #IAM Group (Readonly)
+  GroupReadonly:
+    Type: "AWS::IAM::Group"
+    Properties:
+      GroupName: !Sub "${Prefix}-${EnvironmentName}-grp-readonly"
+      ManagedPolicyArns:
+        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/${Prefix}-basic-policy"
+      Policies:
+        - PolicyName: !Sub "${Prefix}-${EnvironmentName}-polgrp-readonly"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sts:AssumeRole"
+                Resource:
+                  - !Sub "arn:aws:iam::${TargetAWSaccountID}:role/${Prefix}-${EnvironmentName}-role-readonly-assumerole"
+
+  #IAM Group (Ops)
+  GroupOps:
+    Type: "AWS::IAM::Group"
+    Properties:
+      GroupName: !Sub "${Prefix}-${EnvironmentName}-grp-ops"
+      ManagedPolicyArns:
+        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/${Prefix}-basic-policy"
+      Policies:
+        - PolicyName: !Sub "${Prefix}-${EnvironmentName}-polgrp-ops"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sts:AssumeRole"
+                Resource:
+                  - !Sub "arn:aws:iam::${TargetAWSaccountID}:role/${Prefix}-${EnvironmentName}-role-ops-assumerole"
