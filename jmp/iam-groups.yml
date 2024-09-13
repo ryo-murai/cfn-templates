@@ -15,10 +15,6 @@ Parameters:
   EnvironmentName:
     Description: "target environment to switch"
     Type: String
-    AllowedValues:
-      - "jmp"
-      - "prd"
-      - "stg"
 
 Resources:
   # ------------------------------------------------------------------

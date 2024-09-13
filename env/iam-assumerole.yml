@@ -15,10 +15,6 @@ Parameters:
   EnvironmentName:
     Description: "environment name for this role"
     Type: String
-    AllowedValues:
-      - "jmp"
-      - "prd"
-      - "stg"
 
 Resources:
   # ------------------------------------------------------------------
